@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Autofiller</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 11l3 3L22 4"></path>
+          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+        </svg>
+        <h1>Job Autofiller</h1>
+      </div>
+    </div>
+
+    <!-- Profile Status -->
+    <div class="profile-status" id="profileStatus">
+      <div class="status-indicator" id="statusIndicator">
+        <div class="pulse"></div>
+      </div>
+      <div class="status-text">
+        <div class="status-label">Profile Status</div>
+        <div class="status-value" id="statusValue">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Profile Summary -->
+    <div class="profile-summary" id="profileSummary" style="display: none;">
+      <div class="summary-item">
+        <span class="summary-label">Name:</span>
+        <span class="summary-value" id="profileName">-</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Email:</span>
+        <span class="summary-value" id="profileEmail">-</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Experience:</span>
+        <span class="summary-value" id="profileExperience">-</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Education:</span>
+        <span class="summary-value" id="profileEducation">-</span>
+      </div>
+      <div class="last-sync" id="lastSync">
+        Last synced: Never
+      </div>
+    </div>
+
+    <!-- No Profile Message -->
+    <div class="no-profile" id="noProfile" style="display: none;">
+      <div class="no-profile-icon">📋</div>
+      <p>No profile data found</p>
+      <p class="no-profile-hint">Sync from dashboard or set up your profile</p>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button class="btn btn-primary" id="autofillBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 11l3 3L22 4"></path>
+          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+        </svg>
+        Autofill Current Page
+      </button>
+
+      <button class="btn btn-secondary" id="syncBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0118.8-4.3M22 12.5a10 10 0 01-18.8 4.2"></path>
+        </svg>
+        Sync from Dashboard
+      </button>
+
+      <button class="btn btn-secondary" id="dashboardBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+          <path d="M9 3v18M3 9h18M3 15h6"></path>
+        </svg>
+        Open Dashboard
+      </button>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="shortcut-hint">
+        <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> to autofill
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

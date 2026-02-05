@@ -1,0 +1,119 @@
+/* Content script styles */
+
+#job-autofill-button {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 999999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+#autofill-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.4);
+    transition: all 0.3s ease;
+}
+
+#autofill-trigger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(99, 102, 241, 0.5);
+}
+
+#autofill-trigger:active {
+    transform: translateY(0);
+}
+
+#autofill-trigger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#autofill-trigger svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Notification styles */
+.job-autofill-notification {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 1000000;
+    padding: 16px 24px;
+    background: rgba(15, 15, 35, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    animation: slideIn 0.3s ease;
+    max-width: 400px;
+}
+
+.job-autofill-notification.success {
+    border-left: 4px solid #14b8a6;
+}
+
+.job-autofill-notification.error {
+    border-left: 4px solid #ef4444;
+}
+
+.job-autofill-notification.warning {
+    border-left: 4px solid #f59e0b;
+}
+
+.job-autofill-notification.info {
+    border-left: 4px solid #6366f1;
+}
+
+.job-autofill-notification.fade-out {
+    animation: slideOut 0.3s ease forwards;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+}
+
+/* Field highlight animation */
+@keyframes fieldFill {
+    0% {
+        background-color: rgba(99, 102, 241, 0.2);
+    }
+
+    100% {
+        background-color: transparent;
+    }
+}

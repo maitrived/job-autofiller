@@ -1,0 +1,69 @@
+{
+  "manifest_version": 3,
+  "name": "Job Autofiller",
+  "version": "1.0.0",
+  "description": "Automatically fill job application forms with your saved profile data",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "utils/constants.js",
+        "content/fieldDetector.js",
+        "content/safetyManager.js",
+        "content/autofiller.js",
+        "content/jobSearcher.js",
+        "content/aiAnalyzer.js",
+        "content/statusScraper.js",
+        "content/platforms/indeed.js",
+        "content/platforms/linkedin.js",
+        "content/platforms/indeedStatus.js",
+        "content/platforms/linkedinStatus.js",
+        "content/ui.js",
+        "content/automationManager.js",
+        "content/content.js"
+      ],
+      "css": [
+        "content/content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "commands": {
+    "autofill": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F",
+        "mac": "Command+Shift+F"
+      },
+      "description": "Autofill current form"
+    }
+  }
+}
