@@ -29,12 +29,15 @@ const Autofiller = {
                 let value = null;
                 let success = false;
 
-                // SPECIAL LOGIC: Prioritize 'mved1@asu.edu' for email select fields
-                if (field.inputType === 'select' && (field.label.toLowerCase().includes('email') || (field.name && field.name.toLowerCase().includes('email')))) {
-                    // Try to pick the preferred email first
-                    success = await this.fillField(field.element, 'mved1@asu.edu', field.inputType, true); // true = force fuzzy match
+                // Get the appropriate value for this field
+                value = await this.getValueForField(field.type, profile, field.label);
+
+                // If we got a value, try to fill it
+                if (value !== null && value !== undefined) {
+                    success = await this.fillField(field.element, value, field.inputType);
+
                     if (success) {
-                        // Record for logging
+                        results.filled++;
                         results.qaLog.push({
                             question: field.label || field.type,
                             answer: value
@@ -142,6 +145,22 @@ const Autofiller = {
         if (fieldType === 'fullName') {
             return `${personalInfo.firstName} ${personalInfo.lastName}`.trim();
         }
+
+        // --- SPECIALIZED Q&A LOGIC (Ported from Applier) ---
+        // Rule 1: Salary / CTC
+        if (labelLower.includes('ctc') || labelLower.includes('salary') || labelLower.includes('compensation')) {
+            if (labelLower.includes('current')) return '0';
+            if (labelLower.includes('expected')) return '7.2';
+            return '7.2'; // Default fallback
+        }
+
+        // Rule 2: Experience (Years)
+        if (labelLower.includes('experience') || labelLower.includes('years')) {
+            if (labelLower.includes('relevant')) return '1';
+            if (labelLower.includes('total')) return '1.5';
+            return '1'; // Default fallback
+        }
+        // ----------------------------------------------------
 
         // 5. Files (Resume/Cover Letter)
         if (fieldType === 'coverLetter') {
@@ -491,8 +510,16 @@ const Autofiller = {
             const container = FieldDetector.findFormContainer() || document;
 
             // 1. Fill current visible fields within container only
-            const fields = FieldDetector.detectFields(container);
+            let fields = FieldDetector.detectFields(container);
             console.log(`Autofiller: Detected ${fields.length} fields in container.`);
+
+            // RETRY LOGIC: If 0 fields and we are in step 0, wait and try again (maybe animation lag)
+            if (fields.length === 0 && stepsTaken === 0) {
+                console.log('Autofiller: 0 fields detected. Retrying in 2 seconds...');
+                await SafetyManager.humanWait(2000, 2000);
+                fields = FieldDetector.detectFields(container);
+                console.log(`Autofiller: Retry detected ${fields.length} fields.`);
+            }
 
             const stepResults = await this.fillFields(profile, fields);
             console.log(`Autofiller: Filled ${stepResults.filled} fields.`);
@@ -500,6 +527,16 @@ const Autofiller = {
             // Collect Q&A for the final log
             if (stepResults.qaLog) {
                 fullQaLog.push(...stepResults.qaLog);
+            }
+
+            // 1.5 CHECK FOR VALIDATION ERRORS (Red Text)
+            // Ported from Applier/src/linkedin_bot.py
+            const errorElement = container.querySelector('.artdeco-inline-feedback--error');
+            if (errorElement && this.isVisible(errorElement)) {
+                console.warn('Autofiller: Validation error detected. Pausing for 5s to allow manual fix...');
+                await SafetyManager.humanWait(5000, 6000);
+                // Continue loop to re-scan fields or buttons
+                continue;
             }
 
             // 2. Look for Next/Continue/Submit button with POLLING

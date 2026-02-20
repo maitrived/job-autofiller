@@ -10,14 +10,23 @@ const AutomationManager = {
         // Safety check for invalidated context
         if (!chrome.runtime?.id) return;
 
-        // Listen for stop signal
+        // Listen for stop signal AND start signal
         chrome.storage.onChanged.addListener((changes, areaName) => {
-            if (areaName === 'local' && changes.activeAutoApply && !changes.activeAutoApply.newValue) {
-                console.log('AutomationManager: Stop signal received.');
-                this.isActive = false;
+            if (areaName === 'local' && changes.activeAutoApply) {
+                if (!changes.activeAutoApply.newValue) {
+                    console.log('AutomationManager: Stop signal received.');
+                    this.isActive = false;
+                } else if (changes.activeAutoApply.newValue && changes.activeAutoApply.newValue.status === 'running') {
+                    // START signal received via storage change
+                    console.log('AutomationManager: Start signal received via storage change.');
+                    this.isActive = true;
+                    this.config = changes.activeAutoApply.newValue.config;
+                    this.startAutomation();
+                }
             }
         });
 
+        // Also check on initial load (in case we're resuming)
         console.log('AutomationManager: Checking session state...');
         const result = await chrome.storage.local.get('activeAutoApply');
         if (result.activeAutoApply && result.activeAutoApply.status === 'running') {
@@ -111,9 +120,9 @@ const AutomationManager = {
                 console.log('AutomationManager: Clicked Easy Apply. Waiting for modal...');
 
                 // CRITICAL: Wait for the modal to actually appear before filling
-                const modalSelector = '.jobs-easy-apply-content, .jobs-apply-form';
+                const modalSelector = PLATFORM_SELECTORS.linkedin.formContainer || '.jobs-easy-apply-content, .jobs-apply-form';
                 try {
-                    await this.waitForSelector(modalSelector, 7000);
+                    await this.waitForSelector(modalSelector, 10000); // Increased to 10s
                     console.log('AutomationManager: Modal detected.');
 
                     if (!this.isActive) return; // Exit complete function if stopped
@@ -127,7 +136,7 @@ const AutomationManager = {
                         }
                     }
                 } catch (e) {
-                    console.log('AutomationManager: Modal did not appear in time.');
+                    console.log('AutomationManager: Modal did not appear in time. Selector:', modalSelector);
                 }
 
                 if (!this.isActive) break;

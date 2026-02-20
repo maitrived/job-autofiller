@@ -23,11 +23,15 @@ const FieldDetector = {
         const inputs = root.querySelectorAll('input, textarea, select');
 
         inputs.forEach((element) => {
+            const isVisible = this.isVisible(element);
+
             // Skip hidden, disabled, and readonly fields
             if (element.type === 'hidden' ||
                 element.disabled ||
                 element.readOnly ||
-                !this.isVisible(element)) {
+                !isVisible) {
+                // Verbose logging for debugging 0 fields issue
+                // console.log('Skipping field:', element.name || element.id, 'Reason:', !isVisible ? 'Not visible' : 'Disabled/ReadOnly');
                 return;
             }
 
@@ -43,6 +47,9 @@ const FieldDetector = {
                     element,
                     ...fieldInfo
                 });
+            } else {
+                // Log unknown fields to help us add new patterns
+                // console.log('Unknown field type for:', fieldInfo.label || fieldInfo.name || fieldInfo.inputType);
             }
         });
 
@@ -167,6 +174,12 @@ const FieldDetector = {
             if (labelElement) {
                 return labelElement.textContent.trim();
             }
+        }
+
+        // Try closest legend (for radio groups/fieldsets)
+        const legend = element.closest('fieldset')?.querySelector('legend');
+        if (legend) {
+            return legend.textContent.trim();
         }
 
         return '';

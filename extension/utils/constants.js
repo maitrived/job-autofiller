@@ -132,9 +132,9 @@ const FIELD_PATTERNS = {
 // Platform-specific selectors
 const PLATFORM_SELECTORS = {
     linkedin: {
-        formContainer: '.jobs-easy-apply-content, .jobs-apply-form',
-        submitButton: 'button[aria-label*="Submit"], button[aria-label*="Submit application"], button[type="submit"]',
-        nextButton: 'button[aria-label*="Next"], button[aria-label*="Continue"], button[aria-label*="Review"]'
+        formContainer: '.jobs-easy-apply-content, .jobs-apply-form, .jobs-easy-apply-modal__content, div[role="dialog"], .artdeco-modal__content',
+        submitButton: 'button[aria-label*="Submit"], button[aria-label*="Submit application"], button[type="submit"], button.artdeco-button--primary',
+        nextButton: 'button[aria-label*="Next"], button[aria-label*="Continue"], button[aria-label*="Review"], button[aria-label="Continue to next step"], button[aria-label="Review your application"], button.artdeco-button--primary'
     },
     indeed: {
         formContainer: '.ia-BasePage-content, .jobsearch-JobComponent',
