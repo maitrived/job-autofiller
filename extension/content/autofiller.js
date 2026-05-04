@@ -165,18 +165,56 @@ const Autofiller = {
         // 5. Files (Resume/Cover Letter)
         if (fieldType === 'coverLetter') {
             const hasPdf = profile.resume?.coverLetterFile;
+
+            // Try to generate a tailored AI letter if API key is present
+            const aiKey = await AIAnalyzer.getApiKey();
+            let aiLetter = null;
+            if (aiKey) {
+                console.log('%c[Bot] Generating tailored cover letter via AI...', 'color: #6366f1; font-weight: bold;');
+                const storedJD = await chrome.storage.local.get('activeJobContext');
+                const jdText = storedJD.activeJobContext?.text || '';
+                
+                // Get job basics from context or URL
+                const jobDetails = this.getJobMetadata(jdText);
+                
+                aiLetter = await AIAnalyzer.generateTailoredCoverLetter(profile, jobDetails);
+            }
+
+            const finalLetter = aiLetter || profile.resume?.coverLetter || this.generateCoverLetter(profile);
+
             if (hasPdf) {
                 return {
                     type: 'file',
                     dataUrl: profile.resume.coverLetterFile,
                     fileName: profile.resume.coverLetterFileName || 'Cover_Letter.pdf',
-                    text: profile.resume.coverLetter || this.generateCoverLetter(profile)
+                    text: finalLetter
                 };
             }
-            return profile.resume?.coverLetter || this.generateCoverLetter(profile);
+            return finalLetter;
         }
 
         if (fieldType === 'resume') {
+            const aiKey = await AIAnalyzer.getApiKey();
+            
+            // Try to generate an optimized resume using AI and jsPDF
+            if (aiKey && typeof window.ResumeOptimizer !== 'undefined') {
+                 console.log('%c[Bot] Generating dynamically optimized Resume PDF...', 'color: #6366f1; font-weight: bold;');
+                 
+                 const storedJD = await chrome.storage.local.get('activeJobContext');
+                 const jdText = storedJD.activeJobContext?.text || '';
+                 const jobDetails = this.getJobMetadata(jdText) || jdText;
+                 
+                 const pdfBlob = await ResumeOptimizer.generateOptimizedPdf(profile, jobDetails);
+                 if (pdfBlob) {
+                     return {
+                         type: 'file',
+                         blob: pdfBlob, // Pass the direct blob
+                         fileName: 'Optimized_Resume.pdf'
+                     };
+                 }
+            }
+            
+            // Fallback to default static resume
             if (profile.resume?.fileUrl) {
                 return {
                     type: 'file',
@@ -258,8 +296,13 @@ const Autofiller = {
     fillRadioGroup(radio, value) {
         const name = radio.name;
         if (!name) {
-            // If no name, check single item
-            if (radio.value?.toLowerCase() === value?.toString().toLowerCase()) {
+            const rValue = radio.value?.toLowerCase();
+            const rLabel = this.getRadioLabel(radio).toLowerCase();
+            const valueLower = value?.toString().toLowerCase();
+            
+            if (rValue === valueLower || rLabel === valueLower ||
+                (rLabel && rLabel.includes(valueLower)) || 
+                (valueLower && valueLower.includes(rLabel))) {
                 radio.checked = true;
                 this.triggerEvents(radio);
                 return true;
@@ -385,6 +428,19 @@ const Autofiller = {
      * @param {HTMLElement} element
      */
     triggerEvents(element) {
+        // For React/Vue apps, trigger additional events
+        let prototype = window.HTMLInputElement.prototype;
+        if (element.tagName === 'SELECT') {
+            prototype = window.HTMLSelectElement.prototype;
+        } else if (element.tagName === 'TEXTAREA') {
+            prototype = window.HTMLTextAreaElement.prototype;
+        }
+
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+        if (nativeInputValueSetter) {
+            nativeInputValueSetter.call(element, element.value);
+        }
+
         // Trigger input event
         element.dispatchEvent(new Event('input', { bubbles: true }));
 
@@ -393,17 +449,6 @@ const Autofiller = {
 
         // Trigger blur event (some forms validate on blur)
         element.dispatchEvent(new Event('blur', { bubbles: true }));
-
-        // For React/Vue apps, trigger additional events
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-            window.HTMLInputElement.prototype,
-            'value'
-        )?.set;
-
-        if (nativeInputValueSetter) {
-            nativeInputValueSetter.call(element, element.value);
-            element.dispatchEvent(new Event('input', { bubbles: true }));
-        }
     },
 
     /**
@@ -500,7 +545,7 @@ const Autofiller = {
         const platform = FieldDetector.detectPlatform();
         let isComplete = false;
         let stepsTaken = 0;
-        const MAX_STEPS = 15;
+        const MAX_STEPS = 20; // Increased
         const fullQaLog = [];
 
         while (!isComplete && stepsTaken < MAX_STEPS) {
@@ -509,16 +554,19 @@ const Autofiller = {
             // Find the active form container to restrict focus
             const container = FieldDetector.findFormContainer() || document;
 
+            // Wait a bit for step to load completely
+            await SafetyManager.humanWait(1000, 2000);
+
             // 1. Fill current visible fields within container only
             let fields = FieldDetector.detectFields(container);
-            console.log(`Autofiller: Detected ${fields.length} fields in container.`);
+            console.log(`[Autofiller] Step ${stepsTaken + 1}: Detected ${fields.length} visible fields in container:`, container);
 
-            // RETRY LOGIC: If 0 fields and we are in step 0, wait and try again (maybe animation lag)
-            if (fields.length === 0 && stepsTaken === 0) {
-                console.log('Autofiller: 0 fields detected. Retrying in 2 seconds...');
-                await SafetyManager.humanWait(2000, 2000);
-                fields = FieldDetector.detectFields(container);
-                console.log(`Autofiller: Retry detected ${fields.length} fields.`);
+            // RETRY LOGIC: If 0 fields and we are in early steps, wait and try again
+            if (fields.length === 0 && stepsTaken < 3) {
+                console.log('[Autofiller] 0 fields detected. Retrying with full document scan...');
+                await SafetyManager.humanWait(2000, 3000);
+                fields = FieldDetector.detectFields(document); // Try full document if container fails
+                console.log(`[Autofiller] Document scan found ${fields.length} fields.`);
             }
 
             const stepResults = await this.fillFields(profile, fields);
@@ -530,77 +578,112 @@ const Autofiller = {
             }
 
             // 1.5 CHECK FOR VALIDATION ERRORS (Red Text)
-            // Ported from Applier/src/linkedin_bot.py
-            const errorElement = container.querySelector('.artdeco-inline-feedback--error');
-            if (errorElement && this.isVisible(errorElement)) {
-                console.warn('Autofiller: Validation error detected. Pausing for 5s to allow manual fix...');
-                await SafetyManager.humanWait(5000, 6000);
-                // Continue loop to re-scan fields or buttons
-                continue;
+            const errorSelectors = [
+                '.artdeco-inline-feedback--error',
+                '.artdeco-inline-feedback__message',
+                '[role="alert"]',
+                '.fb-form-element__error-message'
+            ];
+
+            let hasError = false;
+            for (let sel of errorSelectors) {
+                const errorElement = container.querySelector(sel);
+                if (errorElement && this.isVisible(errorElement)) {
+                    console.warn(`Autofiller: Validation error detected (${sel}). Content: ${errorElement.innerText}`);
+                    hasError = true;
+                    break;
+                }
+            }
+
+            if (hasError) {
+                console.warn('Autofiller: Pausing for 4s due to error...');
+                await SafetyManager.humanWait(4000, 5000);
+                // We'll try to find any recently missed fields that might fix the error
+                const retryFields = FieldDetector.detectFields(container);
+                if (retryFields.length > 0) {
+                    await this.fillFields(profile, retryFields);
+                }
             }
 
             // 2. Look for Next/Continue/Submit button with POLLING
             let nextButton = null;
             let attempts = 0;
-            while (!nextButton && attempts < 5) {
-                nextButton = this.findNextButton();
+            const maxPolling = 8; // More polling
+            while (!nextButton && attempts < maxPolling) {
+                nextButton = this.findNextButton(container);
                 if (!nextButton) {
-                    console.log(`Autofiller: No button found. Retrying (${attempts + 1}/5)...`);
-                    await new Promise(r => setTimeout(r, 1000));
+                    await new Promise(r => setTimeout(r, 800));
                     attempts++;
                 }
             }
 
             if (nextButton) {
                 const btnText = (nextButton.textContent || nextButton.value || '').trim();
-                console.log(`Autofiller: Found button: "${btnText}"`);
-
-                // If it's the final Submit button, we stop
-                const text = btnText.toLowerCase();
                 const ariaLabel = (nextButton.getAttribute('aria-label') || '').toLowerCase();
-                const isSubmit = text.includes('submit') || ariaLabel.includes('submit');
+                const text = btnText.toLowerCase();
+                const isSubmit = text.includes('submit') || ariaLabel.includes('submit') || ariaLabel.includes('done');
 
+                console.log(`Autofiller: Button found: "${btnText}" (Submit: ${isSubmit})`);
                 await SafetyManager.scrollToElement(nextButton);
 
-                // If button is disabled, try to find missed fields one more time
+                // If button is disabled, try to find hidden required fields
                 if (nextButton.disabled) {
-                    console.warn('Autofiller: Button found but disabled. Scanning for missed fields...');
-                    const extraFields = FieldDetector.detectFields();
-                    if (extraFields.length > 0) {
-                        await this.fillFields(profile, extraFields);
+                    console.warn('Autofiller: Button found but DISABLED. Entering emergency recovery...');
+                    const allInputs = container.querySelectorAll('input, select, textarea');
+                    const emptyRequired = Array.from(allInputs).filter(i => {
+                        const isReq = i.required || i.getAttribute('aria-required') === 'true';
+                        const isEmpty = !i.value || (i.type === 'checkbox' && !i.checked) || (i.type === 'radio' && !i.checked);
+                        return isReq && isEmpty && this.isVisible(i);
+                    });
+
+                    if (emptyRequired.length > 0) {
+                        console.log(`Autofiller: Found ${emptyRequired.length} empty required fields. Using AI recovery...`);
+                        const manualFields = emptyRequired.map(i => ({
+                            element: i,
+                            ...FieldDetector.analyzeField(i)
+                        }));
+                        await this.fillFields(profile, manualFields);
                     }
+                    await SafetyManager.humanWait(1500, 2000);
                 }
 
                 if (!nextButton.disabled) {
-                    console.log(`Autofiller: Clicking ${btnText}...`);
+                    console.log(`Autofiller: Clicking "${btnText}"...`);
+                    await SafetyManager.scrollToElement(nextButton);
+                    await new Promise(r => setTimeout(r, 500));
+
+                    nextButton.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                    nextButton.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
                     nextButton.click();
+
                     stepsTaken++;
 
                     if (isSubmit) {
-                        console.log('Autofiller: Submit clicked. Finish.');
+                        console.log('Autofiller: Final Submit clicked. Waiting for confirmation...');
                         isComplete = true;
-                        await SafetyManager.recordApplication();
-
-                        // Notify background to update job status AND log to Excel
-                        chrome.runtime.sendMessage({
-                            action: 'applicationSubmitted',
-                            url: window.location.href,
-                            platform: platform,
-                            qaLog: fullQaLog // Send the accumulated history
-                        });
-                        return true;
+                        // Verification Step
+                        await SafetyManager.humanWait(3000, 5000);
+                        const postSubmitText = document.body.innerText.toLowerCase();
+                        if (postSubmitText.includes('success') || postSubmitText.includes('received') || postSubmitText.includes('submitted') || postSubmitText.includes('thank you')) {
+                            await SafetyManager.recordApplication();
+                            chrome.runtime.sendMessage({
+                                action: 'applicationSubmitted',
+                                url: window.location.href,
+                                platform: platform,
+                                qaLog: fullQaLog
+                            });
+                            return true;
+                        }
                     } else {
-                        // Human-like wait for next step
-                        console.log('Autofiller: Waiting for next step UI to load...');
-                        await SafetyManager.humanWait(2500, 4500);
+                        await SafetyManager.humanWait(3000, 5000);
                     }
                 } else {
-                    console.error('Autofiller: Button remains disabled after retries. Stopping.');
+                    console.error('Autofiller: Button STUCK on "Disabled".');
                     isComplete = true;
                     return false;
                 }
             } else {
-                console.error('Autofiller: No Next/Submit button found after retries!');
+                console.error('Autofiller: No transition button detected.');
                 isComplete = true;
                 return false;
             }
@@ -610,25 +693,26 @@ const Autofiller = {
 
     /**
      * Find the Next/Continue/Submit button on the page
+     * @param {HTMLElement} container - Scoped container
      * @returns {HTMLElement|null}
      */
-    findNextButton() {
+    findNextButton(container = document) {
         const platform = FieldDetector.detectPlatform();
         const selectors = PLATFORM_SELECTORS[platform];
 
         if (selectors) {
             if (selectors.submitButton) {
-                const btn = document.querySelector(selectors.submitButton);
+                const btn = container.querySelector(selectors.submitButton);
                 if (btn && this.isVisible(btn)) return btn;
             }
             if (selectors.nextButton) {
-                const btn = document.querySelector(selectors.nextButton);
+                const btn = container.querySelector(selectors.nextButton);
                 if (btn && this.isVisible(btn)) return btn;
             }
         }
 
-        // Fallback: search by text
-        const buttons = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn, a.button, .artdeco-button'));
+        // Fallback: search by text within container
+        const buttons = Array.from(container.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn, a.button, .artdeco-button'));
         const nextTexts = ['next', 'continue', 'submit', 'review', 'proceed', 'apply', 'done'];
 
         console.log(`Autofiller: Found ${buttons.length} potential buttons.`);
@@ -644,15 +728,15 @@ const Autofiller = {
                 console.log(`Autofiller: Candidate button "${text}" - Visible: ${isVisible}, Disabled: ${btn.disabled}`);
             }
 
-            return isVisible && isMatch && !btn.disabled;
+            return isVisible && isMatch;
         });
 
         if (match) return match;
 
         // Final Fallback: LinkedIn's Primary Artdeco Button (often "Next" or "Review")
         if (platform === 'linkedin') {
-            console.log('Autofiller: Trying specific LinkedIn primary button fallback...');
-            const artdecoBtn = document.querySelector('.artdeco-button--primary');
+            console.log('Autofiller: Trying specific LinkedIn primary button fallback within container...');
+            const artdecoBtn = container.querySelector('.artdeco-button--primary');
             if (artdecoBtn && this.isVisible(artdecoBtn)) {
                 const text = artdecoBtn.innerText.toLowerCase();
                 console.log(`Autofiller: Found Primary Artdeco Button: "${text}"`);
@@ -710,14 +794,22 @@ const Autofiller = {
      */
     async fillFileUpload(element, fileData) {
         try {
-            if (!fileData || !fileData.dataUrl) return false;
+            if (!fileData) return false;
 
             console.log(`Uploading file: ${fileData.fileName}`);
 
-            // Convert dataURL to File object
-            const response = await fetch(fileData.dataUrl);
-            const blob = await response.blob();
-            const file = new File([blob], fileData.fileName, { type: blob.type });
+            let file;
+            if (fileData.blob) {
+                // If we already have a generated Blob, use it directly
+                file = new File([fileData.blob], fileData.fileName, { type: 'application/pdf' });
+            } else if (fileData.dataUrl) {
+                // Convert dataURL to File object
+                const response = await fetch(fileData.dataUrl);
+                const blob = await response.blob();
+                file = new File([blob], fileData.fileName, { type: blob.type });
+            } else {
+                return false;
+            }
 
             // Create DataTransfer to populate input.files
             const dataTransfer = new DataTransfer();
@@ -828,16 +920,46 @@ const Autofiller = {
     },
 
     /**
+     * Helper to get job title and company from the page
+     */
+    getJobMetadata(jdText) {
+        let title = 'this position';
+        let company = 'the company';
+
+        const platform = FieldDetector.detectPlatform();
+        
+        if (platform === 'linkedin') {
+            title = document.querySelector('.jobs-unified-top-card__job-title')?.innerText || 
+                    document.querySelector('.jobs-details-top-card__job-title')?.innerText || title;
+            company = document.querySelector('.jobs-unified-top-card__company-name')?.innerText || 
+                      document.querySelector('.jobs-details-top-card__company-name')?.innerText || company;
+        } else if (platform === 'indeed') {
+            title = document.querySelector('.jobsearch-JobInfoHeader-title')?.innerText || title;
+            company = document.querySelector('.jobsearch-CompanyReview--withHeader')?.innerText || company;
+        }
+
+        return { title, company, description: jdText };
+    },
+
+    /**
      * Check if element is visible
      * @param {HTMLElement} element
      */
     isVisible(element) {
+        if (!element) return false;
         const style = window.getComputedStyle(element);
-        return style.display !== 'none' && style.visibility !== 'hidden' && element.offsetParent !== null;
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 || rect.height > 0 || element.getClientRects().length > 0;
     }
 };
 
 // Export for use in other scripts
+if (typeof window !== 'undefined') {
+    window.Autofiller = Autofiller;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Autofiller;
 }

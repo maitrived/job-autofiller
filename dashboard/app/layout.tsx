@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Job Autofiller Dashboard",
-  description: "Manage your profile data for automated job applications",
+  title: "Applyr – Job Application Automation Suite",
+  description: "Manage your professional profile and automate your job applications with AI",
 };
 
 export default function RootLayout({

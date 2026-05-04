@@ -132,9 +132,9 @@ const FIELD_PATTERNS = {
 // Platform-specific selectors
 const PLATFORM_SELECTORS = {
     linkedin: {
-        formContainer: '.jobs-easy-apply-content, .jobs-apply-form, .jobs-easy-apply-modal__content, div[role="dialog"], .artdeco-modal__content',
-        submitButton: 'button[aria-label*="Submit"], button[aria-label*="Submit application"], button[type="submit"], button.artdeco-button--primary',
-        nextButton: 'button[aria-label*="Next"], button[aria-label*="Continue"], button[aria-label*="Review"], button[aria-label="Continue to next step"], button[aria-label="Review your application"], button.artdeco-button--primary'
+        formContainer: '.jobs-easy-apply-content, .jobs-apply-form, .jobs-easy-apply-modal__content, div[role="dialog"], .artdeco-modal__content, .jobs-easy-apply-modal, .artdeco-modal',
+        submitButton: 'button[aria-label*="Submit"], button[aria-label*="Submit application"], button[type="submit"], button.artdeco-button--primary, [data-control-name="submit_unfiltered"]',
+        nextButton: 'button[aria-label*="Next"], button[aria-label*="Continue"], button[aria-label*="Review"], button[aria-label="Continue to next step"], button[aria-label="Review your application"], button.artdeco-button--primary, .artdeco-button--primary'
     },
     indeed: {
         formContainer: '.ia-BasePage-content, .jobsearch-JobComponent',
@@ -180,6 +180,11 @@ const DEFAULT_SETTINGS = {
 };
 
 // Export for use in other scripts
+if (typeof window !== 'undefined') {
+    window.FIELD_PATTERNS = FIELD_PATTERNS;
+    window.PLATFORM_SELECTORS = PLATFORM_SELECTORS;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         FIELD_PATTERNS,

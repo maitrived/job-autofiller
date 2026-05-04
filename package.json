@@ -1,0 +1,10 @@
+{
+    "name": "applyr",
+    "private": true,
+    "workspaces": [
+        "dashboard"
+    ],
+    "devDependencies": {
+        "tailwindcss": "^4"
+    }
+}

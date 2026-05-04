@@ -78,6 +78,8 @@ export default function Settings() {
                         >
                             <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1 8B Instruct (Balanced)</option>
                             <option value="mistralai/mistral-7b-instruct">Mistral 7B Instruct (Fast)</option>
+                            <option value="google/gemma-2-9b-it">Gemma 2 9B (Efficient)</option>
+                            <option value="google/gemma-7b-it">Gemma 7B (Fast)</option>
                         </select>
                     </div>
 

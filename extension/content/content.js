@@ -28,8 +28,13 @@ function init() {
     console.log('Job Autofiller Content Script active on:', window.location.href);
 
     // Bridges dashboard requests to extension
-    // Broader check for local development environments
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const isLocal = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.startsWith('192.168.') ||
+        window.location.port === '3000';
+
+    if (isLocal) {
+        console.log('Job Autofiller: Initializing Dashboard Bridge...');
         window.addEventListener('message', async (event) => {
             // Check if extension is still alive
             if (typeof chrome === 'undefined' || !chrome.runtime) return;
@@ -103,9 +108,13 @@ function init() {
         // Always try to capture JD if we're on a job-related page
         expandAndCaptureJD();
 
-        if (shouldAutofill) {
-            handleAutoApply();
-        }
+        // Fix: Ask background script if this specific tab is pending
+        chrome.runtime.sendMessage({ action: 'checkIfPending' }, (response) => {
+            if (shouldAutofill || (response && response.isPending)) {
+                console.log('Content: Auto-autofill condition met.');
+                handleAutoApply();
+            }
+        });
     }
 }
 

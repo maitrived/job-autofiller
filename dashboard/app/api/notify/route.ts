@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
             text = `
 Hello,
 
-The Job Autofiller encountered a page on ${siteName} that requires a login or a new account.
+The Applyr suite encountered a page on ${siteName} that requires a login or a new account.
 No saved credentials were found for this site.
 
 Please go to the tab and create an account or sign in. 
@@ -33,7 +33,7 @@ I have paused the application and will wait for you to click "Continue" on the p
 Happy Job Hunting!
             `;
         } else {
-            subject = `Update from Job Autofiller`;
+            subject = `Update from Applyr`;
             text = details || 'An event occurred that might need your attention.';
         }
 

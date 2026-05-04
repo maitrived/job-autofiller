@@ -62,6 +62,46 @@ const AIAnalyzer = {
     },
 
     /**
+     * Generate tailored Resume optimizing bullets for Job Description
+     */
+    async generateTailoredResume(profile, jobDetails) {
+        const apiKey = await this.getApiKey();
+        if (!apiKey) return null;
+
+        try {
+            const prompt = `
+        You are an expert resume writer. I am providing a User Profile and a Job Description.
+        Task: Re-write the user's experience bullet points to strongly align with the Job Description. 
+        Inject relevant keywords organically. Do NOT fabricate experience that isn't at least implied by their profile.
+        
+        User Profile: ${JSON.stringify(profile)}
+        Job Description: ${jobDetails}
+        
+        RESPOND EXCLUSIVELY IN THE FOLLOWING JSON FORMAT (no markdown, no extra text):
+        {
+          "summary": "2-3 sentence professional summary tailored to the role",
+          "experience": [
+            {
+              "company": "Company Name",
+              "position": "Targeted Position Name",
+              "dates": "Start - End",
+              "location": "Location",
+              "bullets": ["Optimized bullet 1", "Optimized bullet 2"]
+            }
+          ],
+          "skills": "Comma separated string of top skills prioritized for this job"
+        }
+      `;
+
+            const rawResponse = await this.callAI(apiKey, prompt);
+            return JSON.parse(rawResponse);
+        } catch (error) {
+            console.error('AI Resume Tailoring Error:', error);
+            return null;
+        }
+    },
+
+    /**
      * Generate answer for a specific form question
      */
     async generateAnswer(question, profile, jobDescription = '') {
@@ -134,7 +174,7 @@ const AIAnalyzer = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`,
                 'HTTP-Referer': 'http://localhost:3000',
-                'X-Title': 'Job Autofiller'
+                'X-Title': 'Applyr'
             },
             body: JSON.stringify({
                 model: model,

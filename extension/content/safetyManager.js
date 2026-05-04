@@ -88,6 +88,10 @@ const SafetyManager = {
     }
 };
 
+if (typeof window !== 'undefined') {
+    window.SafetyManager = SafetyManager;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = SafetyManager;
 }

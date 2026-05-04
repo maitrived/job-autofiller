@@ -28,10 +28,12 @@ const FieldDetector = {
             // Skip hidden, disabled, and readonly fields
             if (element.type === 'hidden' ||
                 element.disabled ||
-                element.readOnly ||
-                !isVisible) {
-                // Verbose logging for debugging 0 fields issue
-                // console.log('Skipping field:', element.name || element.id, 'Reason:', !isVisible ? 'Not visible' : 'Disabled/ReadOnly');
+                element.readOnly) {
+                return;
+            }
+
+            // For external sites, sometimes we need to be more aggressive with visibility
+            if (!isVisible && !['radio', 'checkbox', 'file'].includes(element.type)) {
                 return;
             }
 
@@ -42,15 +44,11 @@ const FieldDetector = {
 
             const fieldInfo = this.analyzeField(element);
 
-            if (fieldInfo.type !== 'unknown') {
-                fields.push({
-                    element,
-                    ...fieldInfo
-                });
-            } else {
-                // Log unknown fields to help us add new patterns
-                // console.log('Unknown field type for:', fieldInfo.label || fieldInfo.name || fieldInfo.inputType);
-            }
+            // CHANGED: Include 'unknown' fields so Autofiller can try AI/QA Bank on them
+            fields.push({
+                element,
+                ...fieldInfo
+            });
         });
 
         return fields;
@@ -144,45 +142,54 @@ const FieldDetector = {
      * @returns {string}
      */
     getLabelText(element) {
-        // Try to find label by 'for' attribute
+        let text = '';
+
+        // 1. Try to find label by 'for' attribute
         if (element.id) {
             const label = document.querySelector(`label[for="${element.id}"]`);
-            if (label) {
-                return label.textContent.trim();
+            if (label) text = label.innerText || label.textContent;
+        }
+
+        // 2. Try to find parent label
+        if (!text.trim()) {
+            const parentLabel = element.closest('label');
+            if (parentLabel) text = parentLabel.innerText || parentLabel.textContent;
+        }
+
+        // 3. Try aria-labelledby or aria-label
+        if (!text.trim()) {
+            const labelledBy = element.getAttribute('aria-labelledby');
+            if (labelledBy) {
+                const labelElement = document.getElementById(labelledBy);
+                if (labelElement) text = labelElement.innerText || labelElement.textContent;
+            }
+            if (!text.trim()) text = element.getAttribute('aria-label') || '';
+        }
+
+        // 4. DEEP SCAN: Try nearby DOM nodes (Common in modern frameworks)
+        if (!text.trim()) {
+            const container = element.parentElement;
+            if (container) {
+                // Check all children that aren't inputs
+                const siblings = Array.from(container.children).filter(c => c !== element && !['INPUT', 'SELECT', 'TEXTAREA'].includes(c.tagName));
+                if (siblings.length > 0) {
+                    text = siblings.map(s => s.innerText).join(' ');
+                }
             }
         }
 
-        // Try to find parent label
-        const parentLabel = element.closest('label');
-        if (parentLabel) {
-            return parentLabel.textContent.trim();
-        }
-
-        // Try to find nearby label (previous sibling)
-        let sibling = element.previousElementSibling;
-        while (sibling) {
-            if (sibling.tagName === 'LABEL') {
-                return sibling.textContent.trim();
-            }
-            sibling = sibling.previousElementSibling;
-        }
-
-        // Try aria-labelledby
-        const labelledBy = element.getAttribute('aria-labelledby');
-        if (labelledBy) {
-            const labelElement = document.getElementById(labelledBy);
-            if (labelElement) {
-                return labelElement.textContent.trim();
+        // 5. UPWARD SCAN: Check predecessors
+        if (!text.trim()) {
+            let prev = element.previousElementSibling;
+            while (prev && !text.trim()) {
+                if (['SPAN', 'DIV', 'LABEL', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(prev.tagName)) {
+                    text = prev.innerText;
+                }
+                prev = prev.previousElementSibling;
             }
         }
 
-        // Try closest legend (for radio groups/fieldsets)
-        const legend = element.closest('fieldset')?.querySelector('legend');
-        if (legend) {
-            return legend.textContent.trim();
-        }
-
-        return '';
+        return text.trim();
     },
 
     /**
@@ -191,11 +198,34 @@ const FieldDetector = {
      * @returns {boolean}
      */
     isVisible(element) {
+        if (!element) return false;
         const style = window.getComputedStyle(element);
-        return style.display !== 'none' &&
-            style.visibility !== 'hidden' &&
-            style.opacity !== '0' &&
-            element.offsetParent !== null;
+        
+        // Explicitly hidden by display/visibility
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+
+        const rect = element.getBoundingClientRect();
+        const hasZeroSize = rect.width === 0 || rect.height === 0;
+        const hasZeroOpacity = style.opacity === '0';
+
+        // Custom styled inputs (checkbox, radio, file) often hide the real input
+        if (hasZeroOpacity || hasZeroSize) {
+            const type = (element.type || '').toLowerCase();
+            if (['radio', 'checkbox', 'file'].includes(type)) {
+                // Return true if its nearest label or parent is visible
+                const parent = element.closest('label') || element.parentElement;
+                if (parent) {
+                    const parentStyle = window.getComputedStyle(parent);
+                    if (parentStyle.display !== 'none' && parentStyle.visibility !== 'hidden') {
+                        return true;
+                    }
+                }
+            }
+            if (hasZeroOpacity) return false;
+        }
+
+        // Use rect check to handle fixed/absolute positioned elements (modals)
+        return rect.width > 0 || rect.height > 0 || element.getClientRects().length > 0;
     },
 
     /**
@@ -232,6 +262,10 @@ const FieldDetector = {
 };
 
 // Export for use in other scripts
+if (typeof window !== 'undefined') {
+    window.FieldDetector = FieldDetector;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = FieldDetector;
 }

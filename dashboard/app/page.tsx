@@ -14,6 +14,7 @@ import SearchProfileTab from './components/SearchProfileTab';
 import AutoApplyTab from './components/AutoApplyTab';
 import QABankForm from './components/QABankForm';
 import ResumeUpload from './components/ResumeUpload';
+import ResumeLab from './components/ResumeLab';
 import Settings from './components/Settings';
 
 declare global {
@@ -29,21 +30,21 @@ export default function Home() {
   // Initialize activeTab from storage (Lazy Init to prevent flicker)
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('jobAutofillActiveTab') || 'profile-hub';
+      return localStorage.getItem('applyrActiveTab') || 'profile-hub';
     }
     return 'profile-hub';
   });
 
   // Persist active tab
   useEffect(() => {
-    localStorage.setItem('jobAutofillActiveTab', activeTab);
+    localStorage.setItem('applyrActiveTab', activeTab);
   }, [activeTab]);
 
   const [saved, setSaved] = useState(false);
 
   // Load master profile from localStorage on mount
   useEffect(() => {
-    const savedMaster = localStorage.getItem('jobAutofillMaster');
+    const savedMaster = localStorage.getItem('applyrMaster');
     if (savedMaster) {
       try {
         setMaster(JSON.parse(savedMaster));
@@ -52,13 +53,13 @@ export default function Home() {
       }
     } else {
       // Migration: Check for old single profile
-      const oldProfile = localStorage.getItem('jobAutofillProfile');
+      const oldProfile = localStorage.getItem('applyrProfile');
       if (oldProfile) {
         try {
           const profile = JSON.parse(oldProfile);
           const newMaster = { ...defaultMasterProfile, profiles: [profile] };
           setMaster(newMaster);
-          localStorage.setItem('jobAutofillMaster', JSON.stringify(newMaster));
+          localStorage.setItem('applyrMaster', JSON.stringify(newMaster));
         } catch (e) {
           console.error("Failed to parse legacy profile:", e);
         }
@@ -99,7 +100,7 @@ export default function Home() {
   }, []);
 
   const saveMaster = (updatedMaster: MasterProfile) => {
-    localStorage.setItem('jobAutofillMaster', JSON.stringify(updatedMaster));
+    localStorage.setItem('applyrMaster', JSON.stringify(updatedMaster));
     setMaster(updatedMaster);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -113,7 +114,7 @@ export default function Home() {
         resumes: updatedMaster.resumes,
         qaBank: updatedMaster.qaBank // Also include Q&A bank
       };
-      localStorage.setItem('jobAutofillProfile', JSON.stringify(profileToSync));
+      localStorage.setItem('applyrProfile', JSON.stringify(profileToSync));
       window.postMessage({ type: 'UPDATE_PROFILE', profile: profileToSync }, '*');
     }
   };
@@ -180,6 +181,7 @@ export default function Home() {
     { id: 'auto-apply', label: 'Auto-Apply', icon: '🚀' },
     { id: 'qa', label: 'Q&A Bank', icon: '💬' },
     { id: 'resume', label: 'Resume', icon: '📄' },
+    { id: 'resume-lab', label: 'Resume Lab', icon: '🧪' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
 
@@ -192,19 +194,19 @@ export default function Home() {
         style={{
           background: 'var(--bg-secondary)',
           borderBottom: '1px solid var(--border-color)',
-          padding: '0.75rem 1.5rem',
+          padding: '0.5rem 1.25rem',
           position: 'sticky',
           top: 0,
           zIndex: 100,
           backdropFilter: 'blur(10px)',
-          marginBottom: '0.5rem',
+          marginBottom: '0.25rem',
         }}
       >
         <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1
               style={{
-                fontSize: '1.75rem',
+                fontSize: '1.4rem',
                 fontWeight: 800,
                 background: 'var(--gradient-primary)',
                 WebkitBackgroundClip: 'text',
@@ -212,11 +214,11 @@ export default function Home() {
                 backgroundClip: 'text',
               }}
             >
-              Job Autofiller Dashboard
+              Applyr
             </h1>
           </div>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <label htmlFor="import-master" className="btn btn-secondary">
+            <label htmlFor="import-master" className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
               📥 Import
             </label>
             <input
@@ -226,7 +228,7 @@ export default function Home() {
               onChange={importMaster}
               style={{ display: 'none' }}
             />
-            <button onClick={() => saveMaster(master)} className="btn btn-primary">
+            <button onClick={() => saveMaster(master)} className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
               {saved ? '✓ Saved!' : '💾 Save All'}
             </button>
           </div>
@@ -247,8 +249,8 @@ export default function Home() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               style={{
-                padding: '0.6rem 1.2rem',
-                fontSize: '0.9rem',
+                padding: '0.4rem 0.8rem',
+                fontSize: '0.8rem',
                 background: activeTab === tab.id ? 'var(--bg-primary)' : 'transparent',
                 border: 'none',
                 borderBottom: activeTab === tab.id ? '2px solid var(--primary)' : '2px solid transparent',
@@ -259,7 +261,7 @@ export default function Home() {
                 whiteSpace: 'nowrap',
               }}
             >
-              <span style={{ marginRight: '0.5rem' }}>{tab.icon}</span>
+              <span style={{ marginRight: '0.3rem' }}>{tab.icon}</span>
               {tab.label}
             </button>
           ))}
@@ -344,6 +346,10 @@ export default function Home() {
             resume={master.resumes[0]}
             onChange={(resume) => saveMaster({ ...master, resumes: resume ? [resume] : [] })}
           />
+        )}
+
+        {activeTab === 'resume-lab' && (
+          <ResumeLab profile={activeProfile} parsedResumeText={master.resumes[0]?.parsedText} />
         )}
 
         {activeTab === 'settings' && <Settings />}

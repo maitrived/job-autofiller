@@ -9,9 +9,11 @@ importScripts('content/aiAnalyzer.js');
 
 // --- Global State ---
 let activeAutoApply = {};
+let pendingExternalApply = null;
+let pendingAutofillTabs = new Set();
 
 // Restore state from storage on startup
-chrome.storage.local.get('activeAutoApply', (result) => {
+chrome.storage.local.get(['activeAutoApply', 'pendingAutofillTabs'], (result) => {
     try {
         if (result.activeAutoApply && result.activeAutoApply.config) {
             console.log('Restored active auto-apply state:', result.activeAutoApply);
@@ -279,24 +281,39 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // Auto-Apply Handlers
     if (request.action === 'startAutoApply') {
+        console.log('[Background] Received startAutoApply request:', request);
         try {
             const { searchProfile, jobBoards, profile } = request;
+
+            if (!searchProfile) {
+                console.error('[Background] Missing searchProfile in request');
+                sendResponse({ success: false, error: 'Internal Error: Missing Search Profile' });
+                return;
+            }
+
             let targetUrl = '';
-            console.log('Starting auto-apply for:', searchProfile.name);
+            console.log(`[Background] Starting auto-apply for: ${searchProfile.name} (ID: ${searchProfile.id})`);
 
             // 1. Sync profile to extension storage immediately
             if (profile) {
+                console.log('[Background] Syncing user profile to storage...');
                 chrome.storage.local.set({ jobAutofillProfile: profile });
             }
 
             // 2. Find priority job board
-            const enabledBoards = (jobBoards || []).filter(b => b.enabled);
-            const priorityBoard = enabledBoards[0];
-
-            if (!priorityBoard) {
-                sendResponse({ success: false, error: 'No enabled job boards found in settings.' });
-                return;
+            let boards = jobBoards;
+            if (!boards || boards.length === 0) {
+                console.warn('[Background] No job boards provided in request. Using defaults.');
+                boards = [
+                    { id: 'jb_1', name: 'LinkedIn', url: 'https://www.linkedin.com/jobs', enabled: true },
+                    { id: 'jb_2', name: 'Indeed', url: 'https://www.indeed.com/', enabled: true }
+                ];
             }
+
+            const enabledBoards = boards.filter(b => b.enabled);
+            const priorityBoard = enabledBoards[0] || boards[0];
+
+            console.log(`[Background] Using priority board: ${priorityBoard.name}`);
 
             // 3. Construct Search URL
             const config = searchProfile.config || {};
@@ -382,7 +399,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true;
     }
+
+    if (request.action === 'externalApplyTriggered') {
+        console.log(`[Background] External apply triggered for: ${request.jobTitle}`);
+        pendingExternalApply = {
+            jobTitle: request.jobTitle,
+            timestamp: Date.now()
+        };
+        return true;
+    }
+
+    if (request.action === 'checkIfPending' && sender.tab) {
+        const isPending = pendingAutofillTabs.has(sender.tab.id);
+        if (isPending) {
+            console.log(`[Background] Tab ${sender.tab.id} verified its pending status.`);
+            pendingAutofillTabs.delete(sender.tab.id);
+            chrome.storage.local.set({ pendingAutofillTabs: Array.from(pendingAutofillTabs) });
+        }
+        sendResponse({ isPending });
+        return true;
+    }
 });
+
+// Watch for new tabs to handle external applications
+chrome.tabs.onCreated.addListener((tab) => {
+    if (pendingExternalApply && (Date.now() - pendingExternalApply.timestamp < 10000)) {
+        console.log(`[Background] Flagging new tab ${tab.id} for auto-apply.`);
+        pendingAutofillTabs.add(tab.id);
+        chrome.storage.local.set({ pendingAutofillTabs: Array.from(pendingAutofillTabs) });
+        pendingExternalApply = null;
+    }
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+    if (pendingAutofillTabs.has(tabId)) {
+        pendingAutofillTabs.delete(tabId);
+        chrome.storage.local.set({ pendingAutofillTabs: Array.from(pendingAutofillTabs) });
+    }
+});
+
 
 // --- Periodic Background Checks ---
 chrome.alarms.create('checkStatus', { periodInMinutes: 240 }); // Every 4 hours
@@ -403,8 +458,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // (Moved to top)
 
 function broadcastStatusUpdate(statusUpdate) {
-    chrome.tabs.query({ url: 'http://localhost:3000/*' }, (tabs) => {
-        tabs.forEach(tab => {
+    chrome.tabs.query({}, (tabs) => {
+        const dashboardTabs = tabs.filter(t => t.url && (t.url.includes('localhost:3000') || t.url.includes('127.0.0.1:3000')));
+        dashboardTabs.forEach(tab => {
             chrome.tabs.sendMessage(tab.id, {
                 action: 'autoApplyStatusUpdate',
                 status: statusUpdate

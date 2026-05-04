@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Job Autofiller",
+  "name": "Applyr",
   "version": "1.0.0",
-  "description": "Automatically fill job application forms with your saved profile data",
+  "description": "Applyr – Job Application Automation Suite",
   "permissions": [
     "storage",
     "activeTab",
@@ -12,7 +12,8 @@
     "notifications"
   ],
   "host_permissions": [
-    "http://localhost:3000/*"
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -23,12 +24,14 @@
         "<all_urls>"
       ],
       "js": [
+        "utils/jspdf.umd.min.js",
         "utils/constants.js",
         "content/fieldDetector.js",
         "content/safetyManager.js",
         "content/autofiller.js",
         "content/jobSearcher.js",
         "content/aiAnalyzer.js",
+        "content/resumeOptimizer.js",
         "content/statusScraper.js",
         "content/platforms/indeed.js",
         "content/platforms/linkedin.js",

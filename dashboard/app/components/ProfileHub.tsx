@@ -47,6 +47,7 @@ export default function ProfileHub({
     };
 
     const getProfileIcon = (name: string) => {
+        if (!name) return '👤';
         const lower = name.toLowerCase();
         if (lower.includes('software') || lower.includes('dev') || lower.includes('engineer')) return '💻';
         if (lower.includes('data') || lower.includes('analyst') || lower.includes('scientist')) return '📊';

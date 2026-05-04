@@ -20,21 +20,62 @@ export default function ResumeUpload({ resume, onChange }: ResumeUploadProps) {
 
         setUploading(true);
 
-        // Simulate file upload and text extraction
-        // In a real app, you'd upload to a server and use a PDF parser
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            const newResume: Resume = {
-                fileName: file.name,
-                fileUrl: e.target?.result as string,
-                uploadDate: new Date().toISOString(),
-                parsedText: 'Resume text would be extracted here using a PDF parser library',
-            };
+        const arrayBufferReader = new FileReader();
 
-            onChange(newResume);
-            setUploading(false);
+        arrayBufferReader.onload = async (eBuffer) => {
+            const arrayBuffer = eBuffer.target?.result as ArrayBuffer;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const dataUrl = e.target?.result as string;
+
+                try {
+                    // Inject Mozilla's reliable, pre-compiled client-side parser to completely bypass Node.js build issues
+                    if (!(window as any)['pdfjs-dist/build/pdf']) {
+                        await new Promise((resolve, reject) => {
+                            const script = document.createElement('script');
+                            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+                            script.onload = resolve;
+                            script.onerror = reject;
+                            document.head.appendChild(script);
+                        });
+                    }
+
+                    const pdfjsLib = (window as any)['pdfjs-dist/build/pdf'];
+                    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+                    }
+
+                    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+                    const pdfDocument = await loadingTask.promise;
+                    
+                    let extractedText = '';
+                    for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+                        const page = await pdfDocument.getPage(pageNum);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+                        extractedText += pageText + '\n\n';
+                    }
+
+                    const newResume: Resume = {
+                        fileName: file.name,
+                        fileUrl: '', // Removed base64 to prevent localStorage quota issues
+                        uploadDate: new Date().toISOString(),
+                        parsedText: extractedText.trim(),
+                    };
+
+                    onChange(newResume);
+                    setUploading(false);
+
+                } catch (err: any) {
+                    console.error("Failed to parse PDF securely:", err);
+                    alert("Failed to extract text from this PDF: " + err.message);
+                    setUploading(false);
+                }
+            };
+            reader.readAsDataURL(file);
         };
-        reader.readAsDataURL(file);
+        arrayBufferReader.readAsArrayBuffer(file);
     };
 
     const handleDrag = (e: React.DragEvent) => {
